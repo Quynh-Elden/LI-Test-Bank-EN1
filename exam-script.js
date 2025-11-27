@@ -26,12 +26,14 @@ window.onload = function() {
         <div style="text-align: left; color: #e9ecef; font-size: 13px; line-height: 1.2;">
             <p style="margin-bottom: 8px;">Hello <strong>${examData.title} ${examData.candidate}</strong>,</p>
             <p style="margin-bottom: 8px;">My Name Is <strong>${examData.admin}</strong> and I will give to you LifeInvader (<strong>Test 1</strong>).</p>
+            
             <ul style="padding-left: 15px; margin: 0;">
                 <li style="margin-bottom: 3px;">You will have <strong>15 minutes</strong> to edit 7 ADs.</li>
                 <li style="margin-bottom: 3px;">You will need a minimum of <strong>5 correct answers to pass the test</strong>.</li>
-                <li style="margin-bottom: 3px;">Strict grading: Punctuation and casing must be exact!</li>
-                <li style="margin-bottom: 3px;">Enter the <strong>Ad Text</strong> in the large box and the <strong>Category</strong> in the small box.</li>
+                <li style="margin-bottom: 3px;">You can use the LifeInvader <strong>Internal Policy</strong> along with the <strong>Sellable vehicles</strong> list.</li>
+                <li style="margin-bottom: 3px;">Some ADs may need <strong>Rejecting</strong> so keep an eye out for that.</li>
                 <li style="margin-bottom: 3px;">You can copy and paste the numerical symbol here: <strong>№</strong> if you need.</li>
+                <li style="margin-bottom: 3px;">At the end of each AD please mention the <strong>Category</strong> it goes under in brackets.</li>
                 <li style="margin-bottom: 0;">All the best! <img src="LI_TOP.png" style="height:14px; vertical-align:middle;"></li>
             </ul>
         </div>`;
@@ -105,24 +107,23 @@ function updateTimer() {
     }
 }
 
-// --- AYRIŞTIRILMIŞ PUANLAMA MOTORU ---
+// --- PUANLAMA VE RAPORLAMA ---
 function finishExam() {
     clearInterval(timerInterval);
     
+    // 1. ÖNCE SINAV EKRANINI GİZLE
+    document.getElementById('exam-container').style.display = 'none';
+
+    // 2. PUANLAMA
     let correctCount = 0;
     let resultListHTML = "";
     
     examData.indices.forEach((qIndex, i) => {
-        // Kullanıcının Cevapları
         const userAdText = document.getElementById(`answer-text-${i}`).value.trim();
         const userCatText = document.getElementById(`answer-cat-${i}`).value.trim();
-        
-        // Veritabanındaki "Cevap (Kategori)" yapısını parçalayalım
         const fullCorrectAnswer = allQuestionsData[qIndex].a.trim();
         
-        // Son parantezi bulup ayıralım
         const lastParenIndex = fullCorrectAnswer.lastIndexOf('(');
-        
         let correctAdText = "";
         let correctCatText = "";
 
@@ -130,38 +131,28 @@ function finishExam() {
             correctAdText = fullCorrectAnswer.substring(0, lastParenIndex).trim();
             correctCatText = fullCorrectAnswer.substring(lastParenIndex).replace(/[()]/g, '').trim();
         } else {
-            // Eğer veritabanında kategori parantez içinde değilse (Nadir durum)
             correctAdText = fullCorrectAnswer;
             correctCatText = ""; 
         }
 
-        // --- PUANLAMA ---
-        // 1. Reklam Metni Kontrolü (ÇOK KATI - Birebir Eşleşme)
         const isAdCorrect = userAdText === correctAdText;
-
-        // 2. Kategori Kontrolü (ESNEK - Parantez sil, küçük harf yap)
         const cleanUserCat = userCatText.replace(/[()]/g, '').toLowerCase().trim();
         const cleanCorrectCat = correctCatText.toLowerCase().trim();
         const isCatCorrect = cleanUserCat === cleanCorrectCat;
-
-        // İkisi de doğruysa puan ver
         const isTotalCorrect = isAdCorrect && isCatCorrect;
         
         if (isTotalCorrect) correctCount++;
         
-        // PDF Detayları
         let feedbackHTML = "";
         if (!isTotalCorrect) {
-            feedbackHTML = `<div style="font-size:9px; color:#555; margin-top:2px;">`;
-            
+            feedbackHTML = `<div style="font-size:10px; color:#555; margin-top:4px; padding-left:10px; border-left: 2px solid #ccc;">`;
             if (!isAdCorrect) {
-                feedbackHTML += `<div><strong>Ad Text:</strong> <span style="color:red">${userAdText || "EMPTY"}</span> <br> <span style="color:green">Expected: ${correctAdText}</span></div>`;
+                feedbackHTML += `<div><strong>Text:</strong> <span style="color:red; text-decoration:line-through;">${userAdText || "EMPTY"}</span> <br> <span style="color:green">Expected: ${correctAdText}</span></div>`;
             } else {
-                feedbackHTML += `<div><strong>Ad Text:</strong> <span style="color:green">✅ Correct</span></div>`;
+                feedbackHTML += `<div><strong>Text:</strong> <span style="color:green">✅ Correct</span></div>`;
             }
-
             if (!isCatCorrect) {
-                feedbackHTML += `<div style="margin-top:2px;"><strong>Cat:</strong> <span style="color:red">${userCatText || "EMPTY"}</span> -> <span style="color:green">${correctCatText}</span></div>`;
+                feedbackHTML += `<div style="margin-top:2px;"><strong>Cat:</strong> <span style="color:red; text-decoration:line-through;">${userCatText || "EMPTY"}</span> -> <span style="color:green">${correctCatText}</span></div>`;
             } else {
                 feedbackHTML += `<div><strong>Cat:</strong> <span style="color:green">✅ Correct</span></div>`;
             }
@@ -169,7 +160,7 @@ function finishExam() {
         }
 
         resultListHTML += `
-        <div style="margin-bottom:6px; border-bottom:1px solid #ccc; padding-bottom:4px;">
+        <div style="margin-bottom:8px; border-bottom:1px solid #ddd; padding-bottom:5px;">
             <div style="font-weight:bold; font-size:11px;">Q${i+1}: ${isTotalCorrect ? '<span style="color:green">✅ PASSED</span>' : '<span style="color:red">❌ FAILED</span>'}</div>
             ${feedbackHTML}
         </div>`;
@@ -185,66 +176,75 @@ function finishExam() {
 
     if (isPassed) {
         resultMessage = `
-        <h3 style="color:green; margin-top:10px;">Result : ${correctCount}/7 (Passed)</h3>
+        <h3 style="color:green; margin-top:10px; border-bottom: 2px solid green; display:inline-block;">Result : ${correctCount}/7 (Passed)</h3>
         <p style="font-size:11px;"><strong>${examData.title} ${examData.candidate}</strong><br>
-        Congratulations, you have passed the test!</p>`;
+        Congratulations, you have passed the test with ${correctCount}/7 correct answers!<br> 
+        Welcome to LifeInvader.</p>
+        <p style="font-size:11px; margin-bottom:5px;">Please watch the training videos:</p>
+        <ul style="font-size:11px; margin-top:0;">
+            <li><a href="https://youtu.be/-Urb1XQpYJI" style="color:blue;">Emails training</a></li>
+            <li><a href="https://www.youtube.com/watch?v=4_VSZONyonI&ab_channel=Nor!" style="color:blue;">PDA training</a></li>
+        </ul>`;
     } else {
         const retestTime = new Date(now.getTime() + 4*60*60*1000);
         const failMsgDate = retestTime.toLocaleString('en-GB', { timeZone: 'Europe/London' });
         resultMessage = `
-        <h3 style="color:red; margin-top:10px;">Result : ${correctCount}/7 (Fail)</h3>
+        <h3 style="color:red; margin-top:10px; border-bottom: 2px solid red; display:inline-block;">Result : ${correctCount}/7 (Fail)</h3>
         <p style="font-size:11px;"><strong>${examData.title} ${examData.candidate}</strong><br>
-        Sorry, you failed.</p>
-        <p style="font-size:11px;">Retest: <strong>${failMsgDate}</strong></p>`;
+        Sorry to tell you, but you've failed the test with ${correctCount}/7 Correct Answers.</p>
+        <p style="font-size:11px;">You are eligible to take retest after 4 hours on: <br>
+        <strong>${failMsgDate} (City Time)</strong></p>`;
     }
 
-    const pdfContent = `
-    <div style="font-family: Arial, sans-serif; padding: 20px; background: white; color: black; width: 750px; margin: 0 auto;">
-        <div style="text-align:center; margin-bottom:10px;">
-            <img src="https://li-exam-team.github.io/LI-Test-Bank-EN1/LILOGO.jpg" style="height: 60px;">
+    // --- 3. RAPORU EKRANA BAS (HTML OLARAK) ---
+    // PDF'i indirmeden önce sayfayı komple rapora çeviriyoruz.
+    const reportHTML = `
+    <div id="final-report-view" style="font-family: Arial, sans-serif; padding: 40px; background-color: #ffffff; color: #000000; max-width: 800px; margin: 0 auto; min-height: 100vh;">
+        
+        <div style="text-align:center; margin-bottom:15px;">
+            <img src="https://li-exam-team.github.io/LI-Test-Bank-EN1/LILOGO.jpg" style="height: 60px; width: auto; display:block; margin: 0 auto;">
             <h2 style="color: #d32f2f; margin: 5px 0;">LifeInvader Exam Result</h2>
-            <hr style="margin: 5px 0;">
+            <hr style="margin: 5px 0; border: 1px solid #d32f2f;">
         </div>
-        <table style="width:100%; margin-bottom:10px; font-size:11px;">
+
+        <table style="width:100%; margin-bottom:15px; font-size:11px; border-collapse: collapse;">
             <tr><td><strong>Admin:</strong> ${examData.admin}</td><td style="text-align:right;">${examDateStr}</td></tr>
             <tr><td><strong>Candidate:</strong> ${examData.title} ${examData.candidate}</td><td style="text-align:right; font-weight:bold; color:${statusColor}">${statusText}</td></tr>
         </table>
-        <div style="background-color:#f9f9f9; padding:10px; border:1px solid #eee; margin-bottom:10px;">
-            <h4 style="margin-top:0; margin-bottom:5px;">Detailed Analysis:</h4>
+
+        <div style="background-color:#f9f9f9; padding:15px; border-radius:5px; border:1px solid #eee; margin-bottom:15px;">
+            <h4 style="margin-top:0; margin-bottom:10px; border-bottom:1px solid #ccc;">Answers Check:</h4>
             ${resultListHTML}
         </div>
+
         ${resultMessage}
-        <div style="margin-top:20px; text-align:center; font-size:9px; color:gray;">OFFICIAL LIFEINVADER DOCUMENT</div>
+
+        <div style="margin-top:30px; text-align:center; font-size:9px; color:gray;">
+            <hr>OFFICIAL LIFEINVADER DOCUMENT
+        </div>
+        
+        <div style="text-align:center; margin-top:20px;">
+            <p style="color: green; font-weight: bold;">✅ Exam Completed. Downloading PDF...</p>
+        </div>
     </div>
     `;
 
-    const overlay = document.createElement('div');
-    overlay.style.position = 'fixed';
-    overlay.style.top = '0';
-    overlay.style.left = '0';
-    overlay.style.width = '100%';
-    overlay.style.height = '100%';
-    overlay.style.zIndex = '99999';
-    overlay.style.backgroundColor = 'white';
-    overlay.innerHTML = pdfContent;
-    document.body.appendChild(overlay);
+    // Sayfa içeriğini değiştir
+    document.body.innerHTML = reportHTML;
+    document.body.style.backgroundColor = "white"; // Arka planı beyaz yap
 
-    var opt = {
-        margin: 5,
-        filename: `Result_${examData.candidate.replace(/\s/g, '_')}.pdf`,
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-        enableLinks: true
-    };
-
-    html2pdf().set(opt).from(overlay).save().then(() => {
-        document.body.removeChild(overlay);
-        document.getElementById('exam-container').innerHTML = `
-            <div class="text-center text-white mt-5">
-                <h1>Exam Completed</h1>
-                <h3 class="text-success">PDF Downloaded!</h3>
-            </div>
-        `;
-    });
+    // 4. EKRANDAKİ GÖRÜNTÜYÜ PDF YAP
+    // Yarım saniye bekle ki resimler yüklensin
+    setTimeout(() => {
+        const element = document.getElementById('final-report-view');
+        var opt = {
+            margin:       10,
+            filename:     `Result_${examData.candidate.replace(/\s/g, '_')}.pdf`,
+            image:        { type: 'jpeg', quality: 0.98 },
+            html2canvas:  { scale: 2, useCORS: true },
+            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
+            enableLinks:  true
+        };
+        html2pdf().set(opt).from(element).save();
+    }, 500);
 }

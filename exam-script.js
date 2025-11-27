@@ -1,3 +1,7 @@
+// ================================================================
+// LIFEINVADER EXAM SYSTEM - FINAL VERSION (AUDIT LOG + LOGIC FIX)
+// ================================================================
+
 let examData = null;
 let allQuestionsData = [];
 let timerInterval;
@@ -40,8 +44,8 @@ window.onload = function() {
                 <li>You will have <strong>15 minutes</strong> to edit 7 ADs.</li>
                 <li>You will need a minimum of <strong>5 correct answers to pass the test</strong>.</li>
                 <li>You can use the LifeInvader <strong>Internal Policy</strong> along with the <strong>Sellable vehicles</strong> list.</li>
+                <li>If the ad text is correct, you can leave the text box <strong>EMPTY</strong>.</li>
                 <li>Some ADs may need <strong>Rejecting</strong> so keep an eye out for that.</li>
-                <li>You can copy and paste the numerical symbol here: <strong>№</strong> if you need.</li>
                 <li>At the end of each AD please mention the <strong>Category</strong> it goes under in brackets.</li>
                 <li>All the best! <img src="LI_TOP.png" style="height:18px; vertical-align:middle;"></li>
             </ul>
@@ -90,7 +94,7 @@ function loadQuestions() {
                         
                         <div class="row g-2">
                             <div class="col-md-8">
-                                <textarea id="answer-text-${i}" class="form-control answer-input" rows="2" placeholder="Corrected Ad Text"></textarea>
+                                <textarea id="answer-text-${i}" class="form-control answer-input" rows="2" placeholder="Ad Text (Leave empty if correct)"></textarea>
                             </div>
                             <div class="col-md-4">
                                 <input type="text" id="answer-cat-${i}" class="form-control cat-input" placeholder="Category">
@@ -124,7 +128,7 @@ function updateTimer() {
     }
 }
 
-// --- YARDIMCI FONKSİYON ---
+// --- YARDIMCI FONKSİYONLAR ---
 function parseAnswerString(fullStr) {
     const lastParen = fullStr.lastIndexOf('(');
     if (lastParen > -1) {
@@ -136,7 +140,7 @@ function parseAnswerString(fullStr) {
     return { text: fullStr.trim(), cat: "" };
 }
 
-// --- FİNAL PUANLAMA MOTORU (GÜNCELLENMİŞ VERSİYON) ---
+// --- FİNAL PUANLAMA VE RAPORLAMA MOTORU (FİNAL VERSİYON) ---
 function finishExam() {
     clearInterval(timerInterval);
     document.getElementById('exam-container').style.display = 'none';
@@ -144,6 +148,17 @@ function finishExam() {
     let correctCount = 0;
     let resultListHTML = "";
     
+    // YARDIMCI: Metni kemiklerine kadar temizler (Rejected, Reason ve sembolleri atar)
+    function stripRejectionLogic(str) {
+        if (!str) return "";
+        return str.toLowerCase()
+            .replace("rejected", "")
+            .replace("reason", "")
+            .replace(/[+\-:&]/g, "") // Tire, artı, iki nokta, ve işaretini sil
+            .replace(/\s/g, "")      // Tüm boşlukları sil
+            .trim();
+    }
+
     examData.indices.forEach((qIndex, i) => {
         const userAdText = document.getElementById(`answer-text-${i}`).value.trim();
         const userCatText = document.getElementById(`answer-cat-${i}`).value.trim();
@@ -151,39 +166,42 @@ function finishExam() {
         const possibleAnswersRaw = allQuestionsData[qIndex].a.split(" or ");
         
         let isQuestionPassed = false;
+        let finalCorrectObj = null; 
 
+        // --- CEVAP KONTROL DÖNGÜSÜ ---
         for (let rawOption of possibleAnswersRaw) {
             const correctObj = parseAnswerString(rawOption);
-            
-            // --- GÜNCELLENMİŞ DOĞRULAMA (Regex + Strict Mode) ---
+            finalCorrectObj = correctObj; 
+
             let isTextMatch = false;
 
-            // DURUM 1: Eğer doğru cevap "Rejected" içeriyorsa -> ESNEK MOD (Regex)
+            // 1. "Rejected" Soruları İçin Özel Zeka
             if (correctObj.text.startsWith("Rejected")) {
-                // Regex Açıklaması:
-                // ^Rejected       -> Cümle Rejected ile başlamalı
-                // [\s\+\-\&]* -> Araya boşluk, +, -, & gelebilir
-                // (and)?          -> Araya 'and' gelebilir
-                // [\s]* -> Yine boşluk olabilir
-                // Blacklist       -> 'Blacklist' kelimesi ZORUNLU
-                // (ed)?           -> 'ed' eki OPSİYONEL (Yani Blacklist de olur Blacklisted da)
                 
-                const rejectionPattern = /^Rejected[\s\+\-\&]*(and)?[\s]*Blacklist(ed)?/i;
-                
-                if (rejectionPattern.test(userAdText)) {
+                // A) Blacklist Regex Kontrolü (Kısa cevaplar için: "Rejected Blacklist")
+                const blacklistPattern = /^Rejected[\s\+\-\&]*(and)?[\s]*Blacklist(ed)?/i;
+                if (blacklistPattern.test(userAdText)) {
                     isTextMatch = true;
                 }
+                
+                // B) Normalizasyon Kontrolü (Uzun sebepler için: "Reason: Cannot look for gods")
+                // Tireyi, iki noktayı vs. silip karşılaştırır.
+                else {
+                    const cleanUser = stripRejectionLogic(userAdText);
+                    const cleanCorrect = stripRejectionLogic(correctObj.text);
+                    if (cleanUser === cleanCorrect && cleanUser.length > 0) {
+                        isTextMatch = true;
+                    }
+                }
             } 
-            // DURUM 2: Normal İlanlar -> KATI MOD (Birebir Eşleşme)
+            // 2. Normal İlan (Strict Mode - Noktasına kadar aynı olmalı)
             else {
-                // Burada "Swift Deluxe." disiplini devam eder.
-                // Nokta eksikse veya harf hatası varsa GEÇİRMEZ.
                 if (userAdText === correctObj.text) {
                     isTextMatch = true;
                 }
             }
-            // ----------------------------------------------------
 
+            // 3. Kategori Kontrolü
             let isCatMatch = false;
             const cleanUserCat = userCatText.replace(/[()]/g, '').toLowerCase().trim();
             const cleanCorrectCat = correctObj.cat.toLowerCase().trim();
@@ -191,6 +209,7 @@ function finishExam() {
             if (cleanUserCat === cleanCorrectCat) {
                 isCatMatch = true;
             } else if (correctObj.text.startsWith("Rejected")) {
+                // Rejected sorularında kategori boş bırakılabilir veya doğru yazılabilir
                 if (cleanUserCat === "" || cleanUserCat === cleanCorrectCat) {
                     isCatMatch = true;
                 }
@@ -198,41 +217,60 @@ function finishExam() {
 
             if (isTextMatch && isCatMatch) {
                 isQuestionPassed = true;
-                break;
+                break; 
             }
         }
 
         if (isQuestionPassed) correctCount++;
         
-        let feedbackHTML = "";
-        if (!isQuestionPassed) {
-            const primeCorrect = parseAnswerString(possibleAnswersRaw[0]);
-            feedbackHTML = `<div style="font-size:10px; color:#555; margin-top:4px; padding-left:10px; border-left: 2px solid #ccc;">`;
-            
-            if (userAdText !== primeCorrect.text) {
-                 feedbackHTML += `<div><strong>Text:</strong> <span style="color:red; text-decoration:line-through;">${userAdText || "(Empty)"}</span> <br> <span style="color:green">Expected: ${primeCorrect.text}</span></div>`;
-            } else {
-                 feedbackHTML += `<div><strong>Text:</strong> <span style="color:green">✅ Correct</span></div>`;
-            }
+        // --- HTML RAPORLAMA ---
+        
+        // 1. Metin Görünümü Hazırla
+        let adTextDisplay = "";
+        
+        // Kullanıcı cevabının doğru olup olmadığını tekrar kontrol et (Görsel renklendirme için)
+        let isTextVisualCorrect = false;
+        
+        if (finalCorrectObj.text.startsWith("Rejected")) {
+             const blPattern = /^Rejected[\s\+\-\&]*(and)?[\s]*Blacklist(ed)?/i;
+             const cUser = stripRejectionLogic(userAdText);
+             const cCorrect = stripRejectionLogic(finalCorrectObj.text);
+             
+             if (blPattern.test(userAdText) || (cUser === cCorrect && cUser.length > 0)) {
+                 isTextVisualCorrect = true;
+             }
+        } else {
+            if (userAdText === finalCorrectObj.text) isTextVisualCorrect = true;
+        }
 
-            const cleanUserCat = userCatText.replace(/[()]/g, '').toLowerCase().trim();
-            const cleanPrimeCat = primeCorrect.cat.toLowerCase().trim();
-            let catStatus = false;
-            if (cleanUserCat === cleanPrimeCat) catStatus = true;
-            if (primeCorrect.text.startsWith("Rejected") && cleanUserCat === "") catStatus = true;
+        if (isTextVisualCorrect) {
+            adTextDisplay = `<span style="color:green; font-weight:bold;">${userAdText}</span>`;
+        } else {
+            adTextDisplay = `<span style="color:red; text-decoration:line-through;">${userAdText || "(Empty)"}</span> <br><span style="color:green; font-size:10px;">Expected: ${finalCorrectObj.text}</span>`;
+        }
 
-            if (!catStatus) {
-                feedbackHTML += `<div style="margin-top:2px;"><strong>Cat:</strong> <span style="color:red; text-decoration:line-through;">${userCatText || "(Empty)"}</span> -> <span style="color:green">${primeCorrect.cat}</span></div>`;
-            } else {
-                feedbackHTML += `<div><strong>Cat:</strong> <span style="color:green">✅ Correct</span></div>`;
-            }
-            feedbackHTML += `</div>`;
+        // 2. Kategori Görünümü Hazırla
+        let catDisplay = "";
+        const cleanUserCat = userCatText.replace(/[()]/g, '').toLowerCase().trim();
+        const cleanCorrectCat = finalCorrectObj.cat.toLowerCase().trim();
+        let isCatCorrect = (cleanUserCat === cleanCorrectCat);
+        if (finalCorrectObj.text.startsWith("Rejected") && cleanUserCat === "") isCatCorrect = true;
+
+        if (isCatCorrect) {
+            catDisplay = `<span style="color:green; font-weight:bold;">${userCatText || "(Correct)"}</span>`;
+        } else {
+            catDisplay = `<span style="color:red; text-decoration:line-through;">${userCatText || "(Empty)"}</span> <span style="color:green; font-size:10px;">(Expected: ${finalCorrectObj.cat})</span>`;
         }
 
         resultListHTML += `
-        <div style="margin-bottom:8px; border-bottom:1px solid #ddd; padding-bottom:5px;">
-            <div style="font-weight:bold; font-size:11px;">Q${i+1}: ${isQuestionPassed ? '<span style="color:green">✅ PASSED</span>' : '<span style="color:red">❌ FAILED</span>'}</div>
-            ${feedbackHTML}
+        <div style="margin-bottom:10px; border-bottom:1px solid #eee; padding-bottom:5px;">
+            <div style="font-weight:bold; font-size:12px; color:#333;">
+                Q${i+1}: ${isQuestionPassed ? '✅' : '❌'}
+            </div>
+            <div style="font-size:11px; margin-left:15px; margin-top:2px;">
+                <strong>Input:</strong> ${adTextDisplay}<br>
+                <strong>Cat:</strong> ${catDisplay}
+            </div>
         </div>`;
     });
 
@@ -248,22 +286,12 @@ function finishExam() {
         resultMessage = `
         <h3 style="color:green; margin-top:10px; border-bottom: 2px solid green; display:inline-block;">Result : ${correctCount}/7 (Passed)</h3>
         <p style="font-size:11px;"><strong>${examData.title} ${examData.candidate}</strong><br>
-        Congratulations, you have passed the test with ${correctCount}/7 correct answers!<br> 
-        Welcome to LifeInvader.</p>
-        <p style="font-size:11px; margin-bottom:5px;">Please watch the training videos:</p>
-        <ul style="font-size:11px; margin-top:0;">
-            <li><a href="https://youtu.be/-Urb1XQpYJI" style="color:blue;">Emails training</a></li>
-            <li><a href="https://www.youtube.com/watch?v=4_VSZONyonI&ab_channel=Nor!" style="color:blue;">PDA training</a></li>
-        </ul>`;
+        Congratulations! Welcome to LifeInvader.</p>`;
     } else {
         const retestTime = new Date(now.getTime() + 4*60*60*1000);
-        const failMsgDate = retestTime.toLocaleString('en-GB', { timeZone: 'Europe/London' });
         resultMessage = `
         <h3 style="color:red; margin-top:10px; border-bottom: 2px solid red; display:inline-block;">Result : ${correctCount}/7 (Fail)</h3>
-        <p style="font-size:11px;"><strong>${examData.title} ${examData.candidate}</strong><br>
-        Sorry to tell you, but you've failed the test with ${correctCount}/7 Correct Answers.</p>
-        <p style="font-size:11px;">You are eligible to take retest after 4 hours on: <br>
-        <strong>${failMsgDate} (City Time)</strong></p>`;
+        <p style="font-size:11px;">Retest available after: <strong>${retestTime.toLocaleTimeString('en-GB', {timeZone:'Europe/London'})}</strong></p>`;
     }
 
     const reportHTML = `
@@ -277,11 +305,14 @@ function finishExam() {
             <tr><td><strong>Admin:</strong> ${examData.admin}</td><td style="text-align:right;">${examDateStr}</td></tr>
             <tr><td><strong>Candidate:</strong> ${examData.title} ${examData.candidate}</td><td style="text-align:right; font-weight:bold; color:${statusColor}">${statusText}</td></tr>
         </table>
-        <div style="background-color:#f9f9f9; padding:15px; border-radius:5px; border:1px solid #eee; margin-bottom:15px;">
-            <h4 style="margin-top:0; margin-bottom:10px; border-bottom:1px solid #ccc;">Answers Check:</h4>
+        
+        <div style="background-color:#fcfcfc; padding:15px; border-radius:5px; border:1px solid #eee; margin-bottom:15px;">
+            <h4 style="margin-top:0; margin-bottom:10px; border-bottom:1px solid #ccc;">Answers Detail:</h4>
             ${resultListHTML}
         </div>
+
         ${resultMessage}
+        
         <div style="margin-top:30px; text-align:center; font-size:9px; color:gray;">
             <hr>OFFICIAL LIFEINVADER DOCUMENT
         </div>

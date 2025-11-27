@@ -19,7 +19,9 @@ window.onload = function() {
         const jsonString = decodeURIComponent(escape(atob(token)));
         examData = JSON.parse(jsonString);
 
-        // Giriş Metni
+        const diffMinutes = (new Date().getTime() - examData.time) / 1000 / 60;
+        if (diffMinutes > 30) { disableStart("⚠️ This link has expired!"); return; }
+
         const introHTML = `
         <div style="text-align: left; color: #e9ecef; font-size: 13px; line-height: 1.4;">
             <p>Hello <strong>${examData.title} ${examData.candidate}</strong>,</p>
@@ -76,7 +78,7 @@ function loadQuestions() {
                         
                         <div class="row g-2">
                             <div class="col-md-8">
-                                <textarea id="answer-text-${i}" class="form-control answer-input" rows="2" placeholder="Ad Text (Leave empty if already correct)"></textarea>
+                                <textarea id="answer-text-${i}" class="form-control answer-input" rows="2" placeholder="Ad Text (Leave empty if correct)"></textarea>
                             </div>
                             <div class="col-md-4">
                                 <input type="text" id="answer-cat-${i}" class="form-control cat-input" placeholder="Category">
@@ -103,7 +105,7 @@ function updateTimer() {
     }
 }
 
-// --- YARDIMCI: Cevabı Text ve Category olarak ayır ---
+// --- YARDIMCI FONKSİYONLAR ---
 function parseAnswerString(fullStr) {
     const lastParen = fullStr.lastIndexOf('(');
     if (lastParen > -1) {
@@ -115,15 +117,13 @@ function parseAnswerString(fullStr) {
     return { text: fullStr.trim(), cat: "" };
 }
 
-// --- SÜPER TEMİZLEYİCİ (Fuzzy Logic) ---
-// Bu fonksiyon metni standart hale getirir
 function superClean(str) {
     if (!str) return "";
     return str.toLowerCase()
-        .replace(/[.,:;'"()\-]/g, "") // Tüm noktalama işaretlerini sil
-        .replace(/\s+/g, " ") // Fazla boşlukları tek boşluğa indir
-        .replace(/\bblacklist\b/g, "blacklisted") // Blacklist -> Blacklisted yap
-        .replace(/[+&]/g, "and") // + ve & işaretlerini "and" yap
+        .replace(/[.,:;'"()\-]/g, "") 
+        .replace(/\s+/g, " ") 
+        .replace(/\bblacklist\b/g, "blacklisted") 
+        .replace(/[+&]/g, "and") 
         .trim();
 }
 
@@ -139,44 +139,36 @@ function finishExam() {
         const userAdText = document.getElementById(`answer-text-${i}`).value.trim();
         const userCatText = document.getElementById(`answer-cat-${i}`).value.trim();
         const originalQuestionText = allQuestionsData[qIndex].q;
-        
-        // "OR" ile ayrılmış cevapları böl
         const possibleAnswersRaw = allQuestionsData[qIndex].a.split(" or ");
         
         let isQuestionPassed = false;
-        let matchedCorrectObj = null;
+        let bestMatchCorrect = null;
 
         for (let rawOption of possibleAnswersRaw) {
             const correctObj = parseAnswerString(rawOption);
-            matchedCorrectObj = correctObj;
+            bestMatchCorrect = correctObj;
 
-            // 1. REKLAM METNİ KONTROLÜ
             const cleanUserText = superClean(userAdText);
             const cleanCorrectText = superClean(correctObj.text);
             const cleanOriginalQuestion = superClean(originalQuestionText);
 
             let isTextMatch = false;
-            
-            // A) Kullanıcı doğru yazdı mı? (Süper Temizlenmiş Haliyle)
+            // 1. Doğrudan Eşleşme
             if (cleanUserText === cleanCorrectText) {
                 isTextMatch = true;
             }
-            // B) Zımni Onay: Kullanıcı boş bıraktı VE orijinal soru zaten doğruydu?
-            // "Feel Poor" sorusu burada devreye giriyor.
+            // 2. Zımni Onay (Boş Bırakma)
             else if (userAdText === "" && cleanOriginalQuestion.includes(cleanCorrectText)) {
                 isTextMatch = true;
             }
 
-            // 2. KATEGORİ KONTROLÜ
             let isCatMatch = false;
             const cleanUserCat = superClean(userCatText);
             const cleanCorrectCat = superClean(correctObj.cat);
 
             if (cleanUserCat === cleanCorrectCat) {
                 isCatMatch = true;
-            } 
-            // Rejected İstisnası: Kategori boş bırakılabilir veya doğru yazılabilir
-            else if (correctObj.text.toLowerCase().includes("rejected")) {
+            } else if (correctObj.text.toLowerCase().includes("rejected")) {
                 if (cleanUserCat === "" || cleanUserCat === cleanCorrectCat) {
                     isCatMatch = true;
                 }
@@ -190,45 +182,28 @@ function finishExam() {
 
         if (isQuestionPassed) correctCount++;
         
-        let feedbackHTML = "";
-        if (!isQuestionPassed) {
-            const primeCorrect = parseAnswerString(possibleAnswersRaw[0]);
-            
-            feedbackHTML = `<div style="font-size:10px; color:#555; margin-top:4px; padding-left:10px; border-left: 2px solid #ccc;">`;
-            
-            // Metin Hatası Varsa Göster
-            // (Eğer boş bırakmışsa ve doğruysa hata gösterme)
-            const cleanUserText = superClean(userAdText);
-            const cleanCorrectText = superClean(primeCorrect.text);
-            const cleanOriginalQuestion = superClean(originalQuestionText);
-            
-            const isTextReallyCorrect = (cleanUserText === cleanCorrectText) || (userAdText === "" && cleanOriginalQuestion.includes(cleanCorrectText));
-
-            if (!isTextReallyCorrect) {
-                 feedbackHTML += `<div><strong>Text:</strong> <span style="color:red; text-decoration:line-through;">${userAdText || "(Empty)"}</span> <br> <span style="color:green">Expected: ${primeCorrect.text}</span></div>`;
-            } else {
-                 feedbackHTML += `<div><strong>Text:</strong> <span style="color:green">✅ Correct</span></div>`;
-            }
-
-            // Kategori Hatası Varsa Göster
-            const cleanUserCat = superClean(userCatText);
-            const cleanPrimeCat = superClean(primeCorrect.cat);
-            let catStatus = false;
-            if (cleanUserCat === cleanPrimeCat) catStatus = true;
-            if (primeCorrect.text.toLowerCase().includes("rejected") && cleanUserCat === "") catStatus = true;
-
-            if (!catStatus) {
-                feedbackHTML += `<div style="margin-top:2px;"><strong>Cat:</strong> <span style="color:red; text-decoration:line-through;">${userCatText || "(Empty)"}</span> -> <span style="color:green">${primeCorrect.cat}</span></div>`;
-            } else {
-                feedbackHTML += `<div><strong>Cat:</strong> <span style="color:green">✅ Correct</span></div>`;
-            }
-            feedbackHTML += `</div>`;
-        }
+        // --- GÜNCELLENEN RAPOR DETAYI (HER DURUMDA GÖSTER) ---
+        const primeCorrect = parseAnswerString(possibleAnswersRaw[0]);
+        const bgColor = isQuestionPassed ? "#f0fff4" : "#fff5f5"; // Yeşilimsi veya Kırmızımsı arka plan
+        const icon = isQuestionPassed ? "✅ PASSED" : "❌ FAILED";
+        const iconColor = isQuestionPassed ? "green" : "red";
 
         resultListHTML += `
-        <div style="margin-bottom:8px; border-bottom:1px solid #ddd; padding-bottom:5px;">
-            <div style="font-weight:bold; font-size:11px;">Q${i+1}: ${isQuestionPassed ? '<span style="color:green">✅ PASSED</span>' : '<span style="color:red">❌ FAILED</span>'}</div>
-            ${feedbackHTML}
+        <div style="margin-bottom:8px; border:1px solid #ccc; padding:8px; background-color:${bgColor}; border-radius:4px;">
+            <div style="font-weight:bold; font-size:11px; color:${iconColor}; border-bottom:1px dashed #ccc; padding-bottom:2px; margin-bottom:4px;">
+                Q${i+1}: ${icon}
+            </div>
+            
+            <div style="font-size:10px; color:#333;">
+                <strong>Input:</strong> "${userAdText || "(Empty)"}" <br>
+                <strong>Cat:</strong> "${userCatText || "(Empty)"}"
+            </div>
+            
+            ${!isQuestionPassed ? `
+            <div style="font-size:10px; color:#006400; margin-top:4px; border-top:1px dashed #ccc; padding-top:2px;">
+                <strong>Expected:</strong> "${primeCorrect.text}" <br>
+                <strong>Cat:</strong> "${primeCorrect.cat}"
+            </div>` : ''}
         </div>`;
     });
 
@@ -244,7 +219,7 @@ function finishExam() {
         resultMessage = `
         <h3 style="color:green; margin-top:10px; border-bottom: 2px solid green; display:inline-block;">Result : ${correctCount}/7 (Passed)</h3>
         <p style="font-size:11px;"><strong>${examData.title} ${examData.candidate}</strong><br>
-        Congratulations, you have passed the test!<br>Welcome to LifeInvader.</p>
+        Congratulations, you have passed the test!</p>
         <p style="font-size:11px; margin-bottom:5px;">Please watch the training videos:</p>
         <ul style="font-size:11px; margin-top:0;">
             <li><a href="https://youtu.be/-Urb1XQpYJI" style="color:blue;">Emails training</a></li>
@@ -271,11 +246,14 @@ function finishExam() {
             <tr><td><strong>Admin:</strong> ${examData.admin}</td><td style="text-align:right;">${examDateStr}</td></tr>
             <tr><td><strong>Candidate:</strong> ${examData.title} ${examData.candidate}</td><td style="text-align:right; font-weight:bold; color:${statusColor}">${statusText}</td></tr>
         </table>
-        <div style="background-color:#f9f9f9; padding:15px; border-radius:5px; border:1px solid #eee; margin-bottom:15px;">
-            <h4 style="margin-top:0; margin-bottom:10px; border-bottom:1px solid #ccc;">Answers Check:</h4>
+        
+        <div style="background-color:#ffffff; padding:5px; border-radius:5px; margin-bottom:15px;">
+            <h4 style="margin-top:0; margin-bottom:10px; border-bottom:2px solid #333;">Detailed Answers:</h4>
             ${resultListHTML}
         </div>
+        
         ${resultMessage}
+        
         <div style="margin-top:30px; text-align:center; font-size:9px; color:gray;">
             <hr>OFFICIAL LIFEINVADER DOCUMENT
         </div>

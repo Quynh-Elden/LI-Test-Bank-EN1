@@ -37,7 +37,6 @@
             background-color: #d1e7dd;
         }
 
-        /* TİTREME EFEKTİ (SHAKE ANIMATION) */
         @keyframes shake {
             0% { transform: translateX(0); }
             25% { transform: translateX(-5px); }
@@ -61,7 +60,10 @@
             
             <div class="mb-3 text-start">
                 <label class="form-label text-warning small">1. Site Access Code</label>
-                <input type="password" id="sitePassInput" class="form-control text-center fw-bold" placeholder="Global Code">
+                <div class="input-group">
+                    <input type="password" id="sitePassInput" class="form-control text-center fw-bold" placeholder="Global Code">
+                    <button class="btn btn-secondary" type="button" onclick="togglePassword('sitePassInput')">👁️</button>
+                </div>
             </div>
 
             <hr class="border-secondary">
@@ -69,7 +71,11 @@
             <div class="mb-2 text-start">
                 <label class="form-label text-info small">2. Personal Login</label>
                 <input type="text" id="userIdInput" class="form-control mb-2 text-center" placeholder="Your ID">
-                <input type="password" id="userPassInput" class="form-control text-center" placeholder="Your Password">
+                
+                <div class="input-group">
+                    <input type="password" id="userPassInput" class="form-control text-center" placeholder="Your Password">
+                    <button class="btn btn-secondary" type="button" onclick="togglePassword('userPassInput')">👁️</button>
+                </div>
             </div>
             
             <button onclick="checkLogin()" class="btn btn-primary w-100 fw-bold mt-3">SECURE LOGIN</button>
@@ -141,7 +147,7 @@
 
                     </div>
                     <div class="card-footer text-muted text-center text-small">
-                        Grand RP Exam System v2.2
+                        Grand RP Exam System v2.3
                     </div>
                 </div>
             </div>

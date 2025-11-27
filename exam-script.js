@@ -13,24 +13,14 @@ window.onload = function() {
     token = urlParams.get('token');
 
     if (!token) { disableStart("Invalid Link!"); return; }
-    
-    // KONTROL 1: Daha önce "Start"a basıldı mı?
-    if (localStorage.getItem('used_' + token)) { 
-        disableStart("⚠️ This exam has already been taken!"); 
-        return; 
-    }
+    if (localStorage.getItem('used_' + token)) { disableStart("⚠️ This link has already been used!"); return; }
 
     try {
         const jsonString = decodeURIComponent(escape(atob(token)));
         examData = JSON.parse(jsonString);
 
-        // KONTROL 2: Link oluşturulalı 15 dakika geçti mi?
         const diffMinutes = (new Date().getTime() - examData.time) / 1000 / 60;
-        
-        if (diffMinutes > 15) { 
-            disableStart("⚠️ This link has expired! (15 min limit passed)"); 
-            return; 
-        }
+        if (diffMinutes > 30) { disableStart("⚠️ This link has expired!"); return; }
 
         const introHTML = `
         <div style="text-align: left; color: #e9ecef; font-size: 13px; line-height: 1.4;">
@@ -64,9 +54,7 @@ function disableStart(msg) {
 }
 
 function startExam() {
-    // START'A BASILDIĞI AN LİNKİ YAK (KİLİTLE)
     localStorage.setItem('used_' + token, 'true');
-    
     document.getElementById('start-screen').style.display = 'none';
     document.getElementById('exam-container').style.display = 'block';
     loadQuestions();
@@ -87,10 +75,9 @@ function loadQuestions() {
                     <div class="question-block">
                         <label class="fw-bold text-warning mb-2">Question ${i+1}:</label>
                         <p class="text-white mb-2" style="font-family:'Courier New';">${data[qIndex].q}</p>
-                        
                         <div class="row g-2">
                             <div class="col-md-8">
-                                <textarea id="answer-text-${i}" class="form-control answer-input" rows="2" placeholder="Corrected Ad Text"></textarea>
+                                <textarea id="answer-text-${i}" class="form-control answer-input" rows="2" placeholder="Ad Text"></textarea>
                             </div>
                             <div class="col-md-4">
                                 <input type="text" id="answer-cat-${i}" class="form-control cat-input" placeholder="Category">
@@ -107,40 +94,44 @@ function updateTimer() {
     const timerBox = document.getElementById('timer-box');
     let m = Math.floor(timeLeft / 60);
     let s = timeLeft % 60;
-    
-    // Süre 1 dakikadan az kalınca rengi kırmızı yap (Görsel Uyarı)
-    if (timeLeft < 60) {
-        timerBox.style.color = "red";
-        timerBox.classList.add("shake"); // Son saniyelerde titret
-    }
-
     timerBox.innerText = `${m}:${s < 10 ? '0'+s : s}`;
-    
     if (timeLeft <= 0) {
         clearInterval(timerInterval);
-        // Alert'i kaldırdık! Artık sormadan bitiriyor.
-        finishExam(); 
+        alert("TIME IS UP! Submitting...");
+        finishExam();
     } else {
         timeLeft--;
     }
 }
 
-// --- YARDIMCI FONKSİYON ---
+// --- YENİ VE GÜÇLÜ AYRIŞTIRICI ---
 function parseAnswerString(fullStr) {
-    const lastParen = fullStr.lastIndexOf('(');
-    if (lastParen > -1) {
-        return {
-            text: fullStr.substring(0, lastParen).trim(),
-            cat: fullStr.substring(lastParen).replace(/[()]/g, '').trim()
-        };
+    // Sadece sondaki (Kategori) kısmını ayırır.
+    // Örnek: "Rejected (Reason: abc) (Illegal)" -> Text: "Rejected (Reason: abc)" | Cat: "Illegal"
+    // Bu Regex, cümlenin içindeki parantezlerle sondaki kategori parantezini karıştırmaz.
+    const regex = /^(.*)\s+\(([^)]+)\)$/;
+    const match = fullStr.match(regex);
+    
+    if (match) {
+        return { text: match[1].trim(), cat: match[2].trim() };
     }
+    // Eğer kategori parantezi yoksa (örn sadece text varsa)
     return { text: fullStr.trim(), cat: "" };
 }
 
-// --- FİNAL PUANLAMA MOTORU ---
+// --- "ESNEK" TEMİZLEME FONKSİYONU ---
+// Bu fonksiyon noktalama işaretlerini siler ve küçük harfe çevirir.
+// Böylece "Reason:" ile "Reason" aynı sayılır.
+function cleanString(str) {
+    if (!str) return "";
+    return str.toLowerCase()
+        .replace(/[().,:\-]/g, '') // Parantez, nokta, iki nokta, tire hepsini sil
+        .replace(/\s+/g, ' ')       // Fazla boşlukları tek boşluğa indir
+        .trim();
+}
+
 function finishExam() {
     clearInterval(timerInterval);
-    document.getElementById('exam-container').style.display = 'none';
     
     let correctCount = 0;
     let resultListHTML = "";
@@ -148,30 +139,49 @@ function finishExam() {
     examData.indices.forEach((qIndex, i) => {
         const userAdText = document.getElementById(`answer-text-${i}`).value.trim();
         const userCatText = document.getElementById(`answer-cat-${i}`).value.trim();
-        const originalQuestionText = allQuestionsData[qIndex].q;
         const possibleAnswersRaw = allQuestionsData[qIndex].a.split(" or ");
         
         let isQuestionPassed = false;
+        let bestMatchCorrect = null; // Rapor için en uygun doğru cevabı tutalım
 
         for (let rawOption of possibleAnswersRaw) {
             const correctObj = parseAnswerString(rawOption);
+            bestMatchCorrect = correctObj; // Varsayılan olarak bunu göster
 
+            // --- 1. REKLAM METNİ KONTROLÜ (ESNEK) ---
+            // Normalde katı olmalıydı ama noktalama işaretleri yüzünden esnek yapıyoruz
+            // Ancak kelimeler ve harfler doğru olmalı.
+            
+            // Eğer Rejected sorusu ise çok esnek davran (Noktalama önemsiz)
+            const isRejectedQuestion = correctObj.text.toLowerCase().includes("rejected");
+            
             let isTextMatch = false;
-            // 1. Metin Kontrolü (Kesin Eşleşme veya Boş Bırakma)
-            if (userAdText === correctObj.text) {
-                isTextMatch = true;
-            } 
-            // Eğer soru zaten doğruysa ve kullanıcı boş bıraktıysa (Zımni Onay İPTAL EDİLDİĞİ İÇİN bu kısım pasif)
-            // Ama kod güvenliği için şimdilik boş bırakmaya izin vermiyoruz.
-            // Sadece birebir eşleşme arıyoruz.
+            
+            if (isRejectedQuestion) {
+                // Rejected ise sadece harflere bak (CleanString kullan)
+                if (cleanString(userAdText) === cleanString(correctObj.text)) {
+                    isTextMatch = true;
+                }
+            } else {
+                // Normal soru ise harf duyarlılığı olsun ama sondaki nokta vs. affedilsin
+                // Kullanıcının yazdığının sonundaki noktayı silip kontrol edelim
+                const cleanUserText = userAdText.replace(/[.]$/, ''); 
+                const cleanCorrectText = correctObj.text.replace(/[.]$/, '');
+                
+                if (cleanUserText === cleanCorrectText) {
+                    isTextMatch = true;
+                }
+            }
 
+            // --- 2. KATEGORİ KONTROLÜ ---
             let isCatMatch = false;
-            const cleanUserCat = userCatText.replace(/[()]/g, '').toLowerCase().trim();
-            const cleanCorrectCat = correctObj.cat.toLowerCase().trim();
+            const cleanUserCat = cleanString(userCatText);
+            const cleanCorrectCat = cleanString(correctObj.cat);
 
             if (cleanUserCat === cleanCorrectCat) {
                 isCatMatch = true;
             } else if (correctObj.text.startsWith("Rejected")) {
+                // Rejected ise kategori boş olsa da olur, doğru olsa da olur
                 if (cleanUserCat === "" || cleanUserCat === cleanCorrectCat) {
                     isCatMatch = true;
                 }
@@ -179,44 +189,44 @@ function finishExam() {
 
             if (isTextMatch && isCatMatch) {
                 isQuestionPassed = true;
+                bestMatchCorrect = correctObj; // Eşleşen doğru cevabı kaydet
                 break;
             }
         }
 
         if (isQuestionPassed) correctCount++;
         
-        let feedbackHTML = "";
-        if (!isQuestionPassed) {
-            const primeCorrect = parseAnswerString(possibleAnswersRaw[0]);
-            feedbackHTML = `<div style="font-size:10px; color:#555; margin-top:4px; padding-left:10px; border-left: 2px solid #ccc;">`;
+        // --- RAPOR HTML OLUŞTURMA ---
+        if (isQuestionPassed) {
+            resultListHTML += `
+            <div style="margin-bottom:8px; border-bottom:1px solid #eee; padding-bottom:4px;">
+                <div style="font-weight:bold; font-size:12px; color:green;">Q${i+1}: ✅ Correct</div>
+            </div>`;
+        } else {
+            // Yanlışsa detayları göster
+            // Varsayılan olarak ilk doğru seçeneği gösterelim (eğer hiçbiri tutmadıysa)
+            const displayCorrect = bestMatchCorrect || parseAnswerString(possibleAnswersRaw[0]);
             
-            if (userAdText !== primeCorrect.text) {
-                 feedbackHTML += `<div><strong>Text:</strong> <span style="color:red; text-decoration:line-through;">${userAdText || "(Empty)"}</span> <br> <span style="color:green">Expected: ${primeCorrect.text}</span></div>`;
-            } else {
-                 feedbackHTML += `<div><strong>Text:</strong> <span style="color:green">✅ Correct</span></div>`;
-            }
-
-            const cleanUserCat = userCatText.replace(/[()]/g, '').toLowerCase().trim();
-            const cleanPrimeCat = primeCorrect.cat.toLowerCase().trim();
-            let catStatus = false;
-            if (cleanUserCat === cleanPrimeCat) catStatus = true;
-            if (primeCorrect.text.startsWith("Rejected") && cleanUserCat === "") catStatus = true;
-
-            if (!catStatus) {
-                feedbackHTML += `<div style="margin-top:2px;"><strong>Cat:</strong> <span style="color:red; text-decoration:line-through;">${userCatText || "(Empty)"}</span> -> <span style="color:green">${primeCorrect.cat}</span></div>`;
-            } else {
-                feedbackHTML += `<div><strong>Cat:</strong> <span style="color:green">✅ Correct</span></div>`;
-            }
-            feedbackHTML += `</div>`;
+            resultListHTML += `
+            <div style="margin-bottom:10px; border-bottom:1px solid #ccc; padding-bottom:5px; background-color: #fff0f0; padding: 5px;">
+                <div style="font-weight:bold; font-size:12px; color:red;">Q${i+1}: ❌ Failed</div>
+                
+                <div style="font-size:10px; margin-top:4px;">
+                    <strong style="color:#555;">Your Input:</strong><br>
+                    <span style="color:#333;">Text:</span> "${userAdText}" <br>
+                    <span style="color:#333;">Cat:</span> "${userCatText}"
+                </div>
+                
+                <div style="font-size:10px; margin-top:4px;">
+                    <strong style="color:#006400;">Expected:</strong><br>
+                    <span style="color:#006400;">Text:</span> "${displayCorrect.text}" <br>
+                    <span style="color:#006400;">Cat:</span> "${displayCorrect.cat}"
+                </div>
+            </div>`;
         }
-
-        resultListHTML += `
-        <div style="margin-bottom:8px; border-bottom:1px solid #ddd; padding-bottom:5px;">
-            <div style="font-weight:bold; font-size:11px;">Q${i+1}: ${isQuestionPassed ? '<span style="color:green">✅ PASSED</span>' : '<span style="color:red">❌ FAILED</span>'}</div>
-            ${feedbackHTML}
-        </div>`;
     });
 
+    // --- PDF İŞLEMLERİ ---
     const isPassed = correctCount >= 5;
     const now = new Date();
     const examDateStr = now.toLocaleString('en-GB', { timeZone: 'Europe/London' });
@@ -227,12 +237,11 @@ function finishExam() {
 
     if (isPassed) {
         resultMessage = `
-        <h3 style="color:green; margin-top:10px; border-bottom: 2px solid green; display:inline-block;">Result : ${correctCount}/7 (Passed)</h3>
+        <h3 style="color:green; margin-top:15px; border-bottom: 2px solid green; display:inline-block;">Result : ${correctCount}/7 (Passed)</h3>
         <p style="font-size:11px;"><strong>${examData.title} ${examData.candidate}</strong><br>
-        Congratulations, you have passed the test with ${correctCount}/7 correct answers!<br> 
-        Welcome to LifeInvader.</p>
-        <p style="font-size:11px; margin-bottom:5px;">Please watch the training videos:</p>
-        <ul style="font-size:11px; margin-top:0;">
+        Congratulations, you have passed the test!<br>Welcome to LifeInvader.</p>
+        <p style="font-size:11px;">Please watch the training videos:</p>
+        <ul style="font-size:11px;">
             <li><a href="https://youtu.be/-Urb1XQpYJI" style="color:blue;">Emails training</a></li>
             <li><a href="https://www.youtube.com/watch?v=4_VSZONyonI&ab_channel=Nor!" style="color:blue;">PDA training</a></li>
         </ul>`;
@@ -240,11 +249,10 @@ function finishExam() {
         const retestTime = new Date(now.getTime() + 4*60*60*1000);
         const failMsgDate = retestTime.toLocaleString('en-GB', { timeZone: 'Europe/London' });
         resultMessage = `
-        <h3 style="color:red; margin-top:10px; border-bottom: 2px solid red; display:inline-block;">Result : ${correctCount}/7 (Fail)</h3>
+        <h3 style="color:red; margin-top:15px; border-bottom: 2px solid red; display:inline-block;">Result : ${correctCount}/7 (Fail)</h3>
         <p style="font-size:11px;"><strong>${examData.title} ${examData.candidate}</strong><br>
-        Sorry to tell you, but you've failed the test with ${correctCount}/7 Correct Answers.</p>
-        <p style="font-size:11px;">You are eligible to take retest after 4 hours on: <br>
-        <strong>${failMsgDate} (City Time)</strong></p>`;
+        Sorry, you failed.</p>
+        <p style="font-size:11px;">Retest available after: <strong>${failMsgDate}</strong></p>`;
     }
 
     const reportHTML = `

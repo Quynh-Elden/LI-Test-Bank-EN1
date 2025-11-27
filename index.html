@@ -1,1 +1,81 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LI Test Bank - Sınav Oluşturucu</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #212529; color: #e9ecef; }
+        .card { background-color: #343a40; border: 1px solid #495057; }
+        .copy-box {
+            background-color: #e9ecef;
+            color: #212529;
+            border-radius: 5px;
+            padding: 15px;
+            font-family: 'Courier New', monospace; /* Kod görünümü için */
+            white-space: pre-wrap; /* Satırları korur */
+            font-size: 14px;
+            border-left: 5px solid #0d6efd;
+        }
+        .answer-box {
+            border-left: 5px solid #198754; /* Cevap kutusu yeşil çizgili olsun */
+            background-color: #d1e7dd;
+        }
+    </style>
+</head>
+<body>
 
+    <div class="container mt-5">
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <div class="card shadow-lg">
+                    <div class="card-header bg-primary text-white text-center">
+                        <h3 class="mb-0">Grand RP | Reklam Ekibi Sınav Paneli</h3>
+                    </div>
+                    <div class="card-body text-center">
+                        
+                        <p class="lead">Lütfen test oluşturmak istediğiniz kategoriyi seçin:</p>
+                        
+                        <div class="d-grid gap-2 col-8 mx-auto mb-4">
+                            <button onclick="generateExam('easy')" class="btn btn-warning fw-bold btn-lg">
+                                ⚡ EASY (Kolay) Sınav Oluştur
+                            </button>
+                            </div>
+
+                        <hr class="border-secondary">
+
+                        <div id="questions-section" style="display: none;" class="text-start">
+                            <h5 class="text-warning">🔹 Adaya Sorulacak Sorular:</h5>
+                            <div id="questions-box" class="copy-box mb-2"></div>
+                            <button onclick="copyToClipboard('questions-box')" class="btn btn-outline-light w-100 mb-4">
+                                📋 Soruları Kopyala
+                            </button>
+                            
+                            <div class="text-center">
+                                <button onclick="showAnswers()" class="btn btn-success btn-lg">
+                                    ✅ Cevap Anahtarını Göster
+                                </button>
+                            </div>
+                        </div>
+
+                        <div id="answers-section" class="mt-4 text-start" style="display: none;">
+                            <h5 class="text-success">🔹 Cevap Anahtarı (Yetkili İçin):</h5>
+                            <div id="answers-box" class="copy-box answer-box mb-2"></div>
+                            <button onclick="copyToClipboard('answers-box')" class="btn btn-outline-light w-100">
+                                📋 Cevapları Kopyala
+                            </button>
+                        </div>
+
+                    </div>
+                    <div class="card-footer text-muted text-center text-small">
+                        LI Test Bank System v1.0
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

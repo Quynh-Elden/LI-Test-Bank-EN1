@@ -4,7 +4,6 @@ let timerInterval;
 let timeLeft = 15 * 60; 
 let token = "";
 
-// UK SAATİ ALMA
 function getUKTime(dateObj = new Date()) {
     return dateObj.toLocaleString('en-GB', { timeZone: 'Europe/London' });
 }
@@ -98,7 +97,15 @@ function updateTimer() {
     }
 }
 
-// --- FİNAL PDF MOTORU ---
+// --- AKILLI PUANLAMA FONKSİYONU ---
+// Yazıları sadeleştirir: "Hello World!" -> "helloworld"
+function normalizeString(str) {
+    if(!str) return "";
+    return str.toLowerCase()
+        .replace(/[^a-z0-9]/g, "") // Sadece harf ve rakamları tut (nokta, virgül, parantez sil)
+        .trim();
+}
+
 function finishExam() {
     clearInterval(timerInterval);
     
@@ -106,16 +113,35 @@ function finishExam() {
     let resultListHTML = "";
     
     examData.indices.forEach((qIndex, i) => {
-        const userAnswer = document.getElementById(`answer-${i}`).value.trim();
-        const correctAnswer = allQuestionsData[qIndex].a.trim();
-        const isCorrect = userAnswer.toLowerCase() === correctAnswer.toLowerCase();
+        const userAnswerRaw = document.getElementById(`answer-${i}`).value;
+        const correctAnswerRaw = allQuestionsData[qIndex].a;
+        
+        // Sadeleştirilmiş (Normalize) hallerini karşılaştır
+        const userClean = normalizeString(userAnswerRaw);
+        const correctClean = normalizeString(correctAnswerRaw);
+        
+        // Mantık: Eğer doğru cevap kullanıcının yazdığını içeriyorsa VEYA tam tersi
+        // Bu sayede "(5 days)" eksik olsa bile kabul eder.
+        let isCorrect = false;
+        
+        if (userClean === correctClean) {
+            isCorrect = true;
+        } else if (correctClean.includes(userClean) && userClean.length > 5) {
+            // Kullanıcı eksik yazdı ama yazdığı kısım doğru (örn: Rejected yazdı ama reason yazmadı)
+            // Çok kısa cevapları (örn: "a") doğru saymamak için uzunluk kontrolü
+            isCorrect = true;
+        } else if (userClean.includes(correctClean)) {
+            // Kullanıcı fazla detay yazdı
+            isCorrect = true;
+        }
+        
         if (isCorrect) correctCount++;
         
         resultListHTML += `
-        <div style="margin-bottom:10px; border-bottom:1px solid #ccc; padding-bottom:5px;">
-            <div style="font-weight:bold;">Q${i+1}: ${isCorrect ? '<span style="color:green">✅ Correct</span>' : '<span style="color:red">❌ Wrong</span>'}</div>
-            <div style="font-size:12px; color:#333;">Your Answer: ${userAnswer || "(Empty)"}</div>
-            ${!isCorrect ? `<div style="font-size:12px; color:#006400;">Correct: ${correctAnswer}</div>` : ''}
+        <div style="margin-bottom:15px; border-bottom:1px solid #ccc; padding-bottom:5px;">
+            <div style="margin-bottom:5px;"><strong>Q${i+1}:</strong> ${isCorrect ? '<span style="color:green">✅ Correct</span>' : '<span style="color:red">❌ Wrong</span>'}</div>
+            <div style="font-size:12px; color:#333;"><i>Your Answer:</i> ${userAnswerRaw || "(Empty)"}</div>
+            ${!isCorrect ? `<div style="font-size:12px; color:#006400;"><i>Expected:</i> ${correctAnswerRaw}</div>` : ''}
         </div>`;
     });
 
@@ -129,78 +155,84 @@ function finishExam() {
 
     if (isPassed) {
         resultMessage = `
-        <h2 style="color:green; margin-top:20px;">Result : ${correctCount}/7 (Passed)</h2>
+        <h2 style="color:green; margin-top:20px; border-bottom: 2px solid green;">Result : ${correctCount}/7 (Passed)</h2>
         <p><strong>${examData.title} ${examData.candidate}</strong><br>
-        Congratulations, you have passed the test!<br>Welcome to LifeInvader.</p>
-        <p>Please watch the training videos (Emails & PDA training).</p>`;
+        Congratulations, you have passed the test with ${correctCount}/7 correct answers!<br> 
+        Welcome to LifeInvader.</p>
+        <p>Please watch the training videos:</p>
+        <ul>
+            <li><a href="https://youtu.be/-Urb1XQpYJI" style="color:blue;">Emails training</a></li>
+            <li><a href="https://www.youtube.com/watch?v=4_VSZONyonI&ab_channel=Nor!" style="color:blue;">PDA training</a></li>
+        </ul>`;
     } else {
         const retestTime = new Date(now.getTime() + 4*60*60*1000);
         const failMsgDate = retestTime.toLocaleString('en-GB', { timeZone: 'Europe/London' });
         resultMessage = `
-        <h2 style="color:red; margin-top:20px;">Result : ${correctCount}/7 (Fail)</h2>
+        <h2 style="color:red; margin-top:20px; border-bottom: 2px solid red;">Result : ${correctCount}/7 (Fail)</h2>
         <p><strong>${examData.title} ${examData.candidate}</strong><br>
-        Sorry, you failed the test.</p>
-        <p>Retest available after: <strong>${failMsgDate}</strong></p>`;
+        Sorry to tell you, but you've failed the test with ${correctCount}/7 Correct Answers.</p>
+        <p>You are eligible to take retest after 4 hours on: <br>
+        <strong>${failMsgDate} (City Time)</strong></p>`;
     }
 
-    // PDF İÇERİĞİ (GÖRÜNÜR OLACAK)
-    const pdfContent = `
-    <div style="font-family: Arial, sans-serif; padding: 40px; background: white; color: black; width: 750px; margin: 0 auto;">
+    // --- KESİN PDF ÇÖZÜMÜ: EKRANI DEĞİŞTİRME ---
+    // Mevcut sayfayı siliyoruz ve yerine raporu koyuyoruz.
+    // Bu sayede html2pdf %100 çalışıyor.
+    
+    const reportHTML = `
+    <div id="final-report" style="font-family: Arial, sans-serif; padding: 40px; background-color: #ffffff; color: #000000; max-width: 800px; margin: 0 auto;">
+        
         <div style="text-align:center; margin-bottom:20px;">
-            <img src="https://li-exam-team.github.io/LI-Test-Bank-EN1/LILOGO.jpg" style="height: 80px; width: auto;">
-            <h1 style="color: #d32f2f;">LifeInvader Exam Result</h1>
-            <hr>
+            <img src="https://li-exam-team.github.io/LI-Test-Bank-EN1/LILOGO.jpg" style="height: 80px; width: auto; display:block; margin: 0 auto;">
+            <h1 style="color: #d32f2f; margin: 10px 0;">LifeInvader Exam Result</h1>
+            <div style="border-bottom: 3px solid #d32f2f; width: 100%;"></div>
         </div>
-        <table style="width:100%; margin-bottom:20px;">
-            <tr><td><strong>Admin:</strong> ${examData.admin}</td><td style="text-align:right;">${examDateStr}</td></tr>
-            <tr><td><strong>Candidate:</strong> ${examData.title} ${examData.candidate}</td><td style="text-align:right; font-weight:bold; color:${statusColor}">${statusText}</td></tr>
+
+        <table style="width:100%; margin-bottom:20px; font-size:14px;">
+            <tr>
+                <td style="padding: 5px;"><strong>Admin:</strong> ${examData.admin}</td>
+                <td style="padding: 5px; text-align:right;"><strong>Date:</strong> ${examDateStr}</td>
+            </tr>
+            <tr>
+                <td style="padding: 5px;"><strong>Candidate:</strong> ${examData.title} ${examData.candidate}</td>
+                <td style="padding: 5px; text-align:right;"><strong>Status:</strong> <span style="color:${statusColor}; font-weight:bold;">${statusText}</span></td>
+            </tr>
         </table>
-        <div style="background-color:#f9f9f9; padding:15px; border-radius:5px; margin-bottom:20px;">
-            <h3>Answers Check:</h3>
+
+        <div style="background-color:#f8f9fa; padding:20px; border:1px solid #ccc; margin-bottom:20px;">
+            <h3 style="margin-top:0; border-bottom:1px solid #999; padding-bottom:5px;">Answers Check:</h3>
             ${resultListHTML}
         </div>
-        ${resultMessage}
-        <div style="margin-top:40px; text-align:center; font-size:10px; color:gray;"><hr>OFFICIAL LIFEINVADER DOCUMENT</div>
+
+        <div>
+            ${resultMessage}
+        </div>
+
+        <div style="margin-top:50px; text-align:center; font-size:10px; color: #666;">
+            <hr>
+            OFFICIAL LIFEINVADER DOCUMENT
+        </div>
     </div>
     `;
 
-    // 1. Overlay Oluştur (Görünür)
-    const overlay = document.createElement('div');
-    overlay.style.position = 'fixed';
-    overlay.style.top = '0';
-    overlay.style.left = '0';
-    overlay.style.width = '100%';
-    overlay.style.height = '100%';
-    overlay.style.zIndex = '99999';
-    overlay.style.backgroundColor = 'white';
-    overlay.style.overflowY = 'auto'; // Kaydırılabilir olsun
-    overlay.innerHTML = pdfContent;
-    document.body.appendChild(overlay);
+    // 1. Ekrandaki her şeyi sil
+    document.body.innerHTML = reportHTML;
+    document.body.style.backgroundColor = "white"; // Arka planı beyaza çevir
 
+    // 2. PDF İndir
+    const element = document.getElementById('final-report');
     var opt = {
-        margin: 0,
-        filename: `Result_${examData.candidate.replace(/\s/g, '_')}.pdf`,
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        margin:       10,
+        filename:     `Result_${examData.candidate.replace(/\s/g, '_')}.pdf`,
+        image:        { type: 'jpeg', quality: 0.98 },
+        html2canvas:  { scale: 2, useCORS: true },
+        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
     };
 
-    // 2. PDF'i İndir ve EKRANI TEMİZLE
-    html2pdf().set(opt).from(overlay).save().then(() => {
-        // İndirme başlayınca overlay'i kaldır
-        document.body.removeChild(overlay);
-        
-        // Kullanıcıya Bitti Ekranı Göster
-        document.getElementById('exam-container').innerHTML = `
-            <div class="text-center text-white mt-5">
-                <img src="LILOGO.jpg" style="height: 100px; border-radius: 15px; margin-bottom: 20px;">
-                <h1 class="display-4 fw-bold">Exam Completed</h1>
-                <h3 class="text-success">PDF Downloaded Successfully!</h3>
-                <p class="lead">Please check your downloads folder and send the PDF to the Admin.</p>
-                <div class="alert alert-secondary mt-4 d-inline-block">
-                    You can now close this tab.
-                </div>
-            </div>
-        `;
+    // PDF indikten sonra ekrana mesaj ekle
+    html2pdf().set(opt).from(element).save().then(() => {
+        const msg = document.createElement('div');
+        msg.innerHTML = `<h3 style="text-align:center; color:green; margin-top:20px;">PDF Downloaded Successfully!</h3>`;
+        document.body.appendChild(msg);
     });
 }

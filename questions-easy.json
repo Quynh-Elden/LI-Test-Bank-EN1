@@ -69,7 +69,7 @@
   },
   {
     "q": "buying grilled steak and medkit in bulk (Category?)",
-    "a": "Rejected (Reason: Cannot promote food & health items)"
+    "a": "Rejected + Blacklist. (Reason: Cannot promote food & health items)"
   },
   {
     "q": "hiring lvl 3 electrician on construction company site 4 salary 20k per hour (Category?)",

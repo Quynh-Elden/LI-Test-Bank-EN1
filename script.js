@@ -53,7 +53,7 @@ function logout() { location.reload(); }
 function togglePassword(id) { const el = document.getElementById(id); el.type = el.type === 'password' ? 'text' : 'password'; }
 document.addEventListener("keypress", function(e) { if(e.key==="Enter" && document.getElementById('login-screen').style.display!=='none') checkLogin(); });
 
-// --- SINAV SİSTEMİ ---
+// --- SINAV SİSTEMİ (GÜNCELLENDİ: ARTIK KATEGORİLİ SEÇİM YAPIYOR) ---
 
 function generateExam(categoryName) {
     currentCategoryName = categoryName;
@@ -62,12 +62,10 @@ function generateExam(categoryName) {
     fetch(fileName)
         .then(res => res.json())
         .then(data => {
-            const indices = Array.from({length: data.length}, (_, i) => i);
-            for (let i = indices.length - 1; i > 0; i--) {
-                const j = Math.floor(Math.random() * (i + 1));
-                [indices[i], indices[j]] = [indices[j], indices[i]];
-            }
-            selectedIndices = indices.slice(0, 7);
+            // ESKİ RASTGELE KARIŞTIRMA SİLİNDİ.
+            // YENİ AKILLI SEÇİCİ EKLENDİ:
+            selectedIndices = getBalancedIndices(data);
+            
             const selectedQuestions = selectedIndices.map(i => data[i]);
             displayExam(selectedQuestions);
             showCandidateButton();
@@ -115,7 +113,7 @@ function showCandidateButton() {
     qSection.insertBefore(btn, copyBtn);
 }
 
-// --- GÜNCELLENEN KISIM: PRATİK VERİ GİRİŞİ ---
+// --- PRATİK VERİ GİRİŞİ ---
 function generateCandidateLink() {
     
     // 1. SORU: ADAYIN CİNSİYETİ
@@ -155,4 +153,78 @@ function generateCandidateLink() {
     navigator.clipboard.writeText(link).then(() => {
         alert(`✅ LINK COPIED!\n\nCandidate: ${title} ${fullCandidateString}\nAdmin: ${currentAdminName}\n\nSend this link to the candidate.`);
     });
+}
+
+// --- YENİ EKLENEN AKILLI SEÇİCİ FONKSİYONU ---
+function getBalancedIndices(allQuestions) {
+    // 1. İSTEDİĞİMİZ SIRALAMA (MENÜ)
+    const targetOrder = [
+        "Real Estate",  // 1. Soru
+        "Auto",         // 2. Soru
+        "Dating",       // 3. Soru
+        "Work",         // 4. Soru
+        "Business",     // 5. Soru
+        "Rejected",     // 6. Soru (Illegal/Blacklist)
+        "Other"         // 7. Soru (Random/Template)
+    ];
+
+    // 2. KUTULARI HAZIRLA (BUCKETS)
+    let buckets = {
+        "Real Estate": [], "Auto": [], "Dating": [], 
+        "Work": [], "Business": [], "Rejected": [], "Other": []
+    };
+
+    // 3. SORULARI ANALİZ ET VE KUTULARA AT
+    allQuestions.forEach((item, index) => {
+        const answerText = item.a;
+        let category = "Other"; // Varsayılan
+
+        // A) Önce "Rejected" veya "Illegal" var mı?
+        if (answerText.startsWith("Rejected") || answerText.toLowerCase().includes("illegal")) {
+            category = "Rejected";
+        } 
+        // B) Değilse parantez içindeki kategoriye bak: (Auto), (Business) vb.
+        else {
+            const match = answerText.match(/\(([^)]+)\)$/); // Sondaki parantezi bulur
+            if (match) {
+                const rawCat = match[1].toLowerCase().trim();
+                
+                if (rawCat.includes("estate") || rawCat.includes("house")) category = "Real Estate";
+                else if (rawCat.includes("auto") || rawCat.includes("vehicle") || rawCat.includes("car")) category = "Auto";
+                else if (rawCat.includes("dating") || rawCat.includes("love")) category = "Dating";
+                else if (rawCat.includes("work") || rawCat.includes("job")) category = "Work";
+                else if (rawCat.includes("business")) category = "Business";
+                else category = "Other";
+            }
+        }
+
+        // İndeksi uygun kutuya at
+        if (buckets[category]) {
+            buckets[category].push(index);
+        } else {
+            buckets["Other"].push(index);
+        }
+    });
+
+    // 4. HER KUTUDAN BİR TANE SEÇ
+    let finalSelection = [];
+
+    targetOrder.forEach(cat => {
+        let chosenIndex;
+        let bucket = buckets[cat];
+
+        // Eğer o kategoride soru yoksa Other'dan al
+        if (bucket.length === 0) bucket = buckets["Other"];
+
+        if (bucket.length > 0) {
+            const randomIndex = Math.floor(Math.random() * bucket.length);
+            chosenIndex = bucket[randomIndex];
+        } else {
+            chosenIndex = 0; // Hiçbir şey yoksa 0. indeksi al (Çökmemesi için)
+        }
+        
+        finalSelection.push(chosenIndex);
+    });
+
+    return finalSelection;
 }

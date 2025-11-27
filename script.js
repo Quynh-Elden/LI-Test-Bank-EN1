@@ -1,7 +1,6 @@
 // --- GÜVENLİK AYARLARI ---
 const GLOBAL_SITE_PASS = "Admin123"; 
 
-// Kullanıcı Listesi
 const authorizedUsers = {
     "442277": { name: "Queen Targaryen",   pass: "Queen1661" },
     "371687": { name: "Habib Targaryen",   pass: "Habib123" },
@@ -10,17 +9,16 @@ const authorizedUsers = {
     "941":    { name: "Sully Ra'Nell",     pass: "Sully123" },
     "1001":   { name: "Test User",         pass: "1234" }
 };
-// ------------------------
 
 let currentQuestions = [];
 let currentUserInfo = ""; 
 let currentCategoryName = ""; 
+let selectedIndices = []; // Seçilen soruların numaralarını tutacağız
 
 function checkLogin() {
     const siteInput = document.getElementById('sitePassInput').value.trim();
     const idInput = document.getElementById('userIdInput').value.trim();
     const passInput = document.getElementById('userPassInput').value.trim();
-    
     const errorMsg = document.getElementById('error-msg');
     const welcomeMsg = document.getElementById('welcome-msg');
     const loginCard = document.querySelector('#login-screen .card'); 
@@ -29,23 +27,12 @@ function checkLogin() {
         errorMsg.innerText = msg;
         errorMsg.style.display = 'block';
         loginCard.classList.add('shake');
-        setTimeout(() => {
-            loginCard.classList.remove('shake');
-        }, 500);
+        setTimeout(() => loginCard.classList.remove('shake'), 500);
     }
 
-    if (siteInput !== GLOBAL_SITE_PASS) {
-        triggerError("Global Site Access Code is wrong!");
-        return;
-    }
-    if (!authorizedUsers[idInput]) {
-        triggerError("User ID not found in database!");
-        return;
-    }
-    if (authorizedUsers[idInput].pass !== passInput) {
-        triggerError("Wrong personal password!");
-        return;
-    }
+    if (siteInput !== GLOBAL_SITE_PASS) { triggerError("Global Site Access Code is wrong!"); return; }
+    if (!authorizedUsers[idInput]) { triggerError("User ID not found in database!"); return; }
+    if (authorizedUsers[idInput].pass !== passInput) { triggerError("Wrong personal password!"); return; }
 
     const userName = authorizedUsers[idInput].name;
     currentUserInfo = `${userName} (ID: ${idInput})`;
@@ -53,7 +40,6 @@ function checkLogin() {
     errorMsg.style.display = 'none';
     welcomeMsg.innerText = `Access Granted. Welcome, ${userName}!`;
     welcomeMsg.style.display = 'block';
-
     setTimeout(() => {
         document.getElementById('login-screen').style.display = 'none';
         document.getElementById('main-content').style.display = 'block';
@@ -61,27 +47,9 @@ function checkLogin() {
     }, 1000);
 }
 
-function logout() {
-    location.reload(); 
-}
-
-// ŞİFRE GÖSTER/GİZLE FONKSİYONU (YENİ)
-function togglePassword(inputId) {
-    const input = document.getElementById(inputId);
-    if (input.type === "password") {
-        input.type = "text"; // Şifreyi göster
-    } else {
-        input.type = "password"; // Şifreyi gizle
-    }
-}
-
-document.addEventListener("keypress", function(event) {
-    if (event.key === "Enter") {
-        if (document.getElementById('login-screen').style.display !== 'none') {
-            checkLogin();
-        }
-    }
-});
+function logout() { location.reload(); }
+function togglePassword(id) { const el = document.getElementById(id); el.type = el.type === 'password' ? 'text' : 'password'; }
+document.addEventListener("keypress", function(e) { if(e.key==="Enter" && document.getElementById('login-screen').style.display!=='none') checkLogin(); });
 
 // --- SINAV SİSTEMİ ---
 
@@ -90,51 +58,46 @@ function generateExam(categoryName) {
     const fileName = `questions-${categoryName.toLowerCase()}.json`;
 
     fetch(fileName)
-        .then(response => {
-            if (!response.ok) throw new Error("File not found: " + fileName);
-            return response.json();
-        })
+        .then(res => res.json())
         .then(data => {
-            const selectedQuestions = shuffleAndSelect(data, 7);
+            // Önemli: Soruların orjinal indexlerini bulmak için shuffle mantığını değiştiriyoruz
+            const indices = Array.from({length: data.length}, (_, i) => i);
+            
+            // Indexleri karıştır
+            for (let i = indices.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [indices[i], indices[j]] = [indices[j], indices[i]];
+            }
+            
+            // İlk 7 indexi al
+            selectedIndices = indices.slice(0, 7);
+            
+            // Bu indexlere göre soruları seç
+            const selectedQuestions = selectedIndices.map(i => data[i]);
+            
             displayExam(selectedQuestions);
+            
+            // Link oluştur butonunu göster (Eğer varsa)
+            // Butonun HTML'ini dinamik ekleyebiliriz
+            showCandidateButton();
         })
-        .catch(error => {
-            console.error(error);
-            alert("Error loading questions.");
-        });
-}
-
-function shuffleAndSelect(array, count) {
-    let shuffled = [...array];
-    for (let i = shuffled.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-    }
-    return shuffled.slice(0, count);
+        .catch(err => console.error(err));
 }
 
 function displayExam(questions) {
     const qBox = document.getElementById('questions-box');
     const aBox = document.getElementById('answers-box');
-    const qSection = document.getElementById('questions-section');
-    const aSection = document.getElementById('answers-section');
+    document.getElementById('questions-section').style.display = 'block';
+    document.getElementById('answers-section').style.display = 'none';
 
-    qBox.textContent = "";
-    aBox.textContent = "";
-
-    let questionText = "";
-    let answerText = "";
-
+    let qText = "", aText = "";
     questions.forEach((item, index) => {
-        questionText += `${index + 1}) ${item.q}\n`;
-        answerText += `${index + 1}) ${item.a}\n`;
+        qText += `${index + 1}) ${item.q}\n`;
+        aText += `${index + 1}) ${item.a}\n`;
     });
 
-    qBox.textContent = questionText;
-    aBox.textContent = answerText;
-
-    qSection.style.display = 'block';
-    aSection.style.display = 'none';
+    qBox.textContent = qText;
+    aBox.textContent = aText;
 }
 
 function showAnswers() {
@@ -142,22 +105,59 @@ function showAnswers() {
     document.getElementById('answers-section').scrollIntoView({ behavior: 'smooth' });
 }
 
-function copyToClipboard(elementId) {
-    const content = document.getElementById(elementId).innerText;
-    const now = new Date();
-    const timeString = now.toLocaleString('en-GB'); 
-    
-    let finalClip = "";
-    
-    if (elementId === 'questions-box') {
-        finalClip = `🛑 EXAM GENERATION LOG 🛑\nGenerated By: ${currentUserInfo} (${currentCategoryName})\nDate: ${timeString}\n----------------------------------\n\n${content}`;
-    } else {
-        finalClip = content;
-    }
+function copyToClipboard(id) {
+    const content = document.getElementById(id).innerText;
+    const now = new Date().toLocaleString('en-GB');
+    let final = id === 'questions-box' ? `🛑 EXAM LOG 🛑\nGenerated By: ${currentUserInfo} (${currentCategoryName})\nDate: ${now}\n------------------\n\n${content}` : content;
+    navigator.clipboard.writeText(final).then(() => alert("Copied!"));
+}
 
-    navigator.clipboard.writeText(finalClip).then(() => {
-        alert("Copied to clipboard with User Log!");
-    }).catch(err => {
-        console.error('Copy error:', err);
+function downloadPDF() {
+    const content = document.getElementById('questions-box').innerText;
+    const pdfContent = `LIFEINVADER EXAM\nGen By: ${currentUserInfo}\nCat: ${currentCategoryName}\n\n${content}`;
+    var element = document.createElement('div');
+    element.innerText = pdfContent;
+    html2pdf().from(element).save();
+}
+
+// --- YENİ: ADAY LİNKİ OLUŞTURUCU ---
+function showCandidateButton() {
+    // Soruların olduğu kutunun hemen üstüne buton ekleyelim
+    const qSection = document.getElementById('questions-section');
+    
+    // Eğer buton zaten varsa tekrar ekleme
+    if(document.getElementById('btn-candidate-link')) return;
+
+    const btn = document.createElement('button');
+    btn.id = 'btn-candidate-link';
+    btn.className = 'btn btn-warning w-100 mb-2 fw-bold';
+    btn.innerText = '🔗 Generate Candidate Link (15 Mins)';
+    btn.onclick = generateCandidateLink;
+    
+    // Butonu "Copy Questions" butonunun üstüne ekle
+    const copyBtn = qSection.querySelector('button[onclick^="copyToClipboard"]');
+    qSection.insertBefore(btn, copyBtn);
+}
+
+function generateCandidateLink() {
+    // 1. Veriyi hazırla: Kategori + Seçilen Soru Numaraları + Şu anki Zaman
+    const payload = {
+        cat: currentCategoryName.toLowerCase(),
+        indices: selectedIndices,
+        time: new Date().getTime() // Linkin oluşturulduğu zaman
+    };
+
+    // 2. Veriyi Şifrele (Base64)
+    const jsonString = JSON.stringify(payload);
+    const token = btoa(jsonString);
+
+    // 3. Linki oluştur
+    // Mevcut URL'nin sonuna exam.html ekle
+    const baseUrl = window.location.href.substring(0, window.location.href.lastIndexOf('/'));
+    const link = `${baseUrl}/exam.html?token=${token}`;
+
+    // 4. Kopyala
+    navigator.clipboard.writeText(link).then(() => {
+        alert("✅ CANDIDATE LINK COPIED!\n\nSend this link to the candidate.\nWARNING: This link will expire in 30 minutes.");
     });
 }

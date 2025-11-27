@@ -1,13 +1,26 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" translate="no">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="google" content="notranslate">
     <title>Grand RP | Exam Panel</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         body { background-color: #212529; color: #e9ecef; }
         .card { background-color: #343a40; border: 1px solid #495057; }
+        
+        #login-screen {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background-color: #212529;
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
         .copy-box {
             background-color: #e9ecef;
             color: #212529;
@@ -16,8 +29,9 @@
             font-family: 'Courier New', monospace;
             font-size: 14px;
             border-left: 5px solid #0d6efd;
-            /* White-space sildik, artık HTML tagleri ile kontrol edeceğiz */
+            white-space: pre-wrap; 
         }
+        
         .answer-box {
             border-left: 5px solid #198754;
             background-color: #d1e7dd;
@@ -26,12 +40,41 @@
 </head>
 <body>
 
-    <div class="container mt-5">
+    <div id="login-screen">
+        <div class="card shadow-lg p-4 text-center" style="max-width: 400px; width: 100%;">
+            <h3 class="mb-3 text-white">🛡️ Security Check</h3>
+            <p class="text-muted small">Authentication Required</p>
+            
+            <div class="mb-3 text-start">
+                <label class="form-label text-warning small">1. Site Access Code</label>
+                <input type="password" id="sitePassInput" class="form-control text-center" placeholder="Global Code">
+            </div>
+
+            <hr class="border-secondary">
+
+            <div class="mb-2 text-start">
+                <label class="form-label text-info small">2. Personal Login</label>
+                <input type="text" id="userIdInput" class="form-control mb-2 text-center" placeholder="Your ID (e.g. 371687)">
+                <input type="password" id="userPassInput" class="form-control text-center" placeholder="Your Password">
+            </div>
+            
+            <button onclick="checkLogin()" class="btn btn-primary w-100 fw-bold mt-3">SECURE LOGIN</button>
+            
+            <p id="error-msg" class="text-danger mt-2 small" style="display:none;">Access Denied!</p>
+            <p id="welcome-msg" class="text-success mt-2 fw-bold" style="display:none;"></p>
+        </div>
+    </div>
+
+    <div id="main-content" class="container mt-5" style="display: none;">
         <div class="row justify-content-center">
             <div class="col-md-8">
                 <div class="card shadow-lg">
                     <div class="card-header bg-primary text-white text-center">
                         <h3 class="mb-0">LifeInvader Advertising Team Exam Panel</h3>
+                        <div class="d-flex justify-content-between align-items-center mt-2">
+                            <small id="user-display" class="text-light opacity-75"></small>
+                            <button onclick="logout()" class="btn btn-sm btn-danger py-0" style="font-size: 12px;">Logout</button>
+                        </div>
                     </div>
                     <div class="card-body text-center">
                         
@@ -56,7 +99,7 @@
 
                         <div id="questions-section" style="display: none;" class="text-start">
                             <h5 class="text-warning">🔹 Questions for the Candidate:</h5>
-                            <div id="questions-box" class="copy-box mb-2"></div>
+                            <div id="questions-box" class="copy-box mb-2 notranslate"></div>
                             <button onclick="copyToClipboard('questions-box')" class="btn btn-outline-light w-100 mb-4">
                                 📋 Copy Questions
                             </button>
@@ -70,7 +113,7 @@
 
                         <div id="answers-section" class="mt-4 text-start" style="display: none;">
                             <h5 class="text-success">🔹 Answer Key (For Staff):</h5>
-                            <div id="answers-box" class="copy-box answer-box mb-2"></div>
+                            <div id="answers-box" class="copy-box answer-box mb-2 notranslate"></div>
                             <button onclick="copyToClipboard('answers-box')" class="btn btn-outline-light w-100">
                                 📋 Copy Answers
                             </button>
@@ -78,7 +121,7 @@
 
                     </div>
                     <div class="card-footer text-muted text-center text-small">
-                        Grand RP Exam System v1.2
+                        Grand RP Exam System v2.1
                     </div>
                 </div>
             </div>

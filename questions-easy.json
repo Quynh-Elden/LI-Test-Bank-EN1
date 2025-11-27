@@ -25,7 +25,7 @@
   },
   {
     "q": "I need to sell head bags and ropes (Category?)",
-    "a": "Rejected & Blacklisted: Cannot promote illegal items. (5 days) (Illegal Items)"
+    "a": "Rejected + Blacklisted - Reason: Cannot promote illegal items."
   },
   {
     "q": "looking for a bacpak 4 lvl.2.2m (Category?)",
@@ -69,7 +69,7 @@
   },
   {
     "q": "buying grilled steak and medkit in bulk (Category?)",
-    "a": "Rejected + Blacklist. (Reason: Cannot promote food & health items)"
+    "a": "Rejected + Blacklist - Reason: Cannot promote food & health items"
   },
   {
     "q": "hiring lvl 3 electrician on construction company site 4 salary 20k per hour (Category?)",

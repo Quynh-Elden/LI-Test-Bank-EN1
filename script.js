@@ -4,9 +4,6 @@ const GLOBAL_SITE_PASS = "Admin123";
 const authorizedUsers = {
     "442277": { name: "Queen Targaryen",   pass: "Queen1661" },
     "371687": { name: "Habib Targaryen",   pass: "Habib123" },
-    "200328": { name: "Kayy Sarsilmaz",    pass: "Kayy123" },
-    "286841": { name: "Courts Marelli",    pass: "Courts123" },
-    "941":    { name: "Sully Ra'Nell",     pass: "Sully123" },
     "1001":   { name: "Test User",         pass: "1234" }
 };
 

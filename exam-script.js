@@ -1,5 +1,5 @@
 // ================================================================
-// LIFEINVADER EXAM SYSTEM - FINAL VERSION (LOGIC FIX + AUDIT LOG)
+// LIFEINVADER EXAM SYSTEM - FINAL VERSION (NUCLEAR LOGIC FIX)
 // ================================================================
 
 let examData = null;
@@ -143,50 +143,57 @@ function parseAnswerString(fullStr) {
     return { text: fullStr.trim(), cat: "" };
 }
 
-// 2. Kategori Temizleyici (YENİ - Tolerans için)
+// 2. Kategori Temizleyici (Tolerans için)
 function cleanCategory(str) {
     if (!str) return "";
     // Parantezleri kaldır, harf olmayan her şeyi sil, küçük harfe çevir
     return str.replace(/[()]/g, '').replace(/[^a-zA-Z]/g, '').toLowerCase();
 }
 
-// 3. Gelişmiş Rejected Kontrolü (YENİ - Akıllı Eşleşme)
+// 3. Gelişmiş Rejected Kontrolü (NÜKLEER TEMİZLİK MODU)
 function checkRejectionMatch(userAnswer, correctAnswer) {
-    let u = userAnswer.toLowerCase().trim();
-    let c = correctAnswer.toLowerCase().trim();
+    let u = userAnswer.toLowerCase();
+    let c = correctAnswer.toLowerCase();
 
+    // Sadece Rejected sorularında devreye girer
     if (!c.startsWith("reject")) return false;
 
-    // KURAL A: Blacklist Kontrolü
+    // KURAL A: Blacklist Kontrolü (Hala Zorunlu)
     const requiresBlacklist = c.includes("blacklist");
     const userHasBlacklist = u.includes("blacklist");
     
     // Eğer cevap Blacklist gerektiriyor ama kullanıcı yazmadıysa -> YANLIŞ
     if (requiresBlacklist && !userHasBlacklist) return false; 
 
-    // KURAL B: Temizlik (Niyet Okuma)
-    // Bağlaçları (reason, and, +, -) atıp sadece anahtar kelimeleri karşılaştır
-    function stripJunk(text) {
+    // KURAL B: Nükleer Temizlik (Nuclear Stripping)
+    // Amacımız: Harfler ve rakamlar hariç her şeyi (boşluklar, noktalar, bağlaçlar) yok etmek.
+    function nuclearStrip(text) {
         return text
-            .replace(/rejected|reject/g, "")       // Reject kelimesini at
-            .replace(/blacklisted|blacklist/g, "") // Blacklist kelimesini at
-            .replace(/reason/g, "")                // Reason kelimesini at
-            .replace(/[:+\-&]/g, "")               // Sembolleri at (+ - : &)
-            .replace(/\band\b/g, "")               // "and" bağlacını at
-            .replace(/\s+/g, " ")                  // Boşlukları temizle
-            // --- YENİ EKLENEN KRİTİK SATIR ---
-            .replace(/\b(admin|admins|god|gods)\b/g, "gods") // Admin ve God kelimelerini eşitle
-            // ---------------------------------
-            .trim();
+            // 1. Kritik Eş anlamlılar (Synonyms)
+            .replace(/can\s*not/g, "cannot")       // "can not" -> "cannot" (Bitişik yap)
+            .replace(/\b(admin|admins|god|gods)\b/g, "gods") // Admin -> gods (Eşitle)
+            
+            // 2. Gereksiz Kelimeleri At
+            .replace(/rejected|reject/g, "")       
+            .replace(/blacklisted|blacklist/g, "") 
+            .replace(/reason/g, "") 
+            
+            // 3. Bağlaçları At (ve, veya, and, or) - Listeleme farklarını yok etmek için
+            .replace(/\b(and|or)\b/g, "")
+            
+            // 4. Sembolleri, Noktalamayı ve BOŞLUKLARI At
+            // [^a-z0-9] demek harf ve rakam OLMAYAN her şeyi sil demek.
+            // Bu; nokta, virgül, &, +, -, :, ve tüm boşlukları siler.
+            .replace(/[^a-z0-9]/g, ""); 
     }
 
-    const uClean = stripJunk(u);
-    const cClean = stripJunk(c);
+    const uClean = nuclearStrip(u);
+    const cClean = nuclearStrip(c);
 
     // İNİSİYATİF: Kullanıcı sadece "Rejected" yazıp bıraktıysa ve sebep belirtmediyse
     if (uClean === "" || uClean.length < 3) return true; 
 
-    // Sebep yazıldıysa, sebebin doğru cevapla eşleşmesi gerekir
+    // Artık elimizde sadece "cannotpromotefoodhealthitems" gibi saf bir metin var. Karşılaştır:
     return uClean === cClean;
 }
 
@@ -198,12 +205,6 @@ function finishExam() {
     let correctCount = 0;
     let resultListHTML = "";
     
-    // Raporlama için basit temizleyici
-    function stripRejectionLogicForReport(str) {
-        if (!str) return "";
-        return str.toLowerCase().replace(/rejected|reason|[+\-:&]|\s/g, "").trim();
-    }
-
     examData.indices.forEach((qIndex, i) => {
         const userAdText = document.getElementById(`answer-text-${i}`).value.trim();
         const userCatText = document.getElementById(`answer-cat-${i}`).value.trim();
@@ -214,7 +215,6 @@ function finishExam() {
         let finalCorrectObj = null; 
 
         // --- CEVAP KONTROL DÖNGÜSÜ ---
-        // Bir sorunun birden fazla doğru cevabı ("or" ile ayrılmış) olabilir, hepsini dene
         for (let rawOption of possibleAnswersRaw) {
             const correctObj = parseAnswerString(rawOption);
             finalCorrectObj = correctObj; 
@@ -224,7 +224,7 @@ function finishExam() {
 
             // ADIM 1: METİN KONTROLÜ
             if (correctObj.text.toLowerCase().startsWith("reject")) {
-                // REJECTED İSE: Esnek Kontrol Fonksiyonunu Çağır
+                // REJECTED İSE: Nükleer Kontrol Fonksiyonunu Çağır
                 if (checkRejectionMatch(userAdText, correctObj.text)) {
                     isTextMatch = true;
                 }
